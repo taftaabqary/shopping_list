@@ -66,7 +66,7 @@ class _ShoppingListState extends State<ShoppingList> {
             onDismissed: (position) {
               _deleteGroceryItem(groceryItem[index]);
             },
-              key: ValueKey(groceryItem[index]),
+              key: ValueKey(groceryItem[index].id),
               child:  ListTile(
                 title: Text(groceryItem[index].name),
                 leading: Container(
