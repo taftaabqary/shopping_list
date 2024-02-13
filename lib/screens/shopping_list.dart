@@ -15,6 +15,8 @@ class ShoppingList extends StatefulWidget {
 
 class _ShoppingListState extends State<ShoppingList> {
   List<GroceryItem> groceryItem = [];
+  var _isLoading = true;
+  String? _isError;
 
   @override
   void initState() {
@@ -24,40 +26,69 @@ class _ShoppingListState extends State<ShoppingList> {
 
   void _loadNewListItem() async {
     final url = Uri.https(
-        'flutterprep-36c21-default-rtdb.asia-southeast1.firebasedatabase.app',
+        'flutterpreps-36c21-default-rtdb.asia-southeast1.firebasedatabase.app',
         'shopping_list.json');
-    final response = await http.get(url);
-    final Map<String, dynamic> listData = json.decode(response.body);
 
-    final List<GroceryItem> newListItem = [];
+    try {
+      final response = await http.get(url);
 
-    for (final data in listData.entries) {
-      final category = categories.entries.firstWhere((value) => value.value.title == data.value['category']).value;
-      newListItem.add(GroceryItem(
-          id: data.key,
-          name: data.value['name'],
-          quantity: data.value['quantity'],
-          category: category
-      ));
+      // if(response.statusCode >= 400) {
+      //   setState(() {
+      //     _isError = 'Failed to try fetching data, try again later';
+      //   });
+      // }
+
+      if(response.body == 'null') {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final Map<String, dynamic> listData = json.decode(response.body);
+      final List<GroceryItem> newListItem = [];
+
+      for (final data in listData.entries) {
+        final category = categories.entries.firstWhere((value) => value.value.title == data.value['category']).value;
+        newListItem.add(GroceryItem(
+            id: data.key,
+            name: data.value['name'],
+            quantity: data.value['quantity'],
+            category: category
+        ));
+      }
+
+      setState(() {
+        groceryItem = newListItem;
+        _isLoading = false;
+      });
+    } catch(error) {
+      setState(() {
+        _isError = 'Error while requesting some data, ${error.toString()}';
+      });
     }
-
-    setState(() {
-      groceryItem = newListItem;
-    });
   }
 
   void _addNewItem() async {
-    await Navigator.of(context).push<GroceryItem>(
+    final newData = await Navigator.of(context).push<GroceryItem>(
         MaterialPageRoute(builder: (ctx) => const NewList()));
 
-    _loadNewListItem();
+    if(newData == null) {
+      return;
+    }
+
+    setState(() {
+      groceryItem.add(newData);
+    });
   }
 
-  void _deleteGroceryItem(GroceryItem item) {
+  void _deleteGroceryItem(GroceryItem item) async {
     final indexItem = groceryItem.indexOf(item);
     setState(() {
       groceryItem.remove(item);
     });
+    final url = Uri.https(
+        'flutterprep-36c21-default-rtdb.asia-southeast1.firebasedatabase.app', 'shopping_list/${item.id}.json');
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Remove ${item.name} from the list'),
@@ -69,6 +100,13 @@ class _ShoppingListState extends State<ShoppingList> {
             });
           }),
     ));
+
+    final response = await http.delete(url);
+    if(response.statusCode >= 400) {
+      setState(() {
+        groceryItem.insert(indexItem, item);
+      });
+    }
   }
 
   @override
@@ -96,6 +134,16 @@ class _ShoppingListState extends State<ShoppingList> {
                 ),
                 trailing: Text(groceryItem[index].quantity.toString()),
               )));
+    }
+
+    if(_isLoading) {
+      mainContent = const Center(child: CircularProgressIndicator());
+    }
+
+    if(_isError != null) {
+      mainContent = Center(
+        child: Text(_isError!, style: Theme.of(context).textTheme.bodyLarge),
+      );
     }
 
     return Scaffold(
